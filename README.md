@@ -32,6 +32,16 @@ Local page: http://<vm>:8090/
 
 ## Gotchas
 
+- **Envoy channel.** This Envoy came from another station and listened on
+  channel 3; the Vue ISS is on channel 1, so it received nothing (archive had
+  indoor/barometer only, rxCheckPercent 0). Fixed 2026-11-14 with weewx stopped:
+  `weectl device --set-transmitter-type=1,0 -y` and `--set-transmitter-type=3,10 -y`
+  (back out: `3,0` and `1,10`). Check with `weectl device --info` →
+  TRANSMITTERS / RECEPTION STATS.
+- Port 22222 is a *different* Envoy (same Vue ISS) polled by Cumulus on a
+  Windows VM. Never connect to it — its WiFiLogger allows one client.
+- Records before 2026-11-14 12:45 EST have no outdoor data.
+
 - **The WiFiLogger allows one TCP client and holds a dropped session for
   minutes.** After stopping/restarting weewx (or any test connection) it may
   answer nothing for ~5+ minutes ("Unable to wake up Vantage console").
