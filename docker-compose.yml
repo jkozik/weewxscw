@@ -1,0 +1,71 @@
+name: "weewxscw"
+
+# Sanibel/Captiva (Florida) station: Davis Vantage Vue -> Davis Envoy ->
+# WiFiLogger, reached over the internet at the host/port set in
+# data/weewx.conf [Vantage] (git-ignored; see data/weewx.conf.example).
+# Web: Seasons skin on host port 8090 -> weewx.sancapweather.com via a
+# Cloudflare reverse proxy.
+
+services:
+  weewx:
+    build: .
+    image: weewxscw-weewx
+    container_name: weewx-scw
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./data
+        target: /data
+    environment:
+      - TZ=America/New_York
+    # Fresh Seasons pages = the Envoy is being polled and archive records
+    # are being written. The Envoy's archive interval can be up to 30 min,
+    # so allow ~2 intervals before calling it unhealthy.
+    healthcheck:
+      test: ["CMD-SHELL", "find /data/public_html -name 'index.html' -mmin -65 | grep -q . || exit 1"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 15m
+    # Cap container logs (Oct 2026: an uncapped weewx json log filled /)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 384M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nginx-scw
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - ./data/public_html:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+    depends_on:
+      weewx:
+        condition: service_started
