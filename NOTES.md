@@ -202,6 +202,14 @@ Modeled on `weewxrtlsdr` (Naperville); nothing is shared with it or with
   Tested as jkozik, including negative tests for the stale, unreachable
   and wrong-banner cases. The zabbix user is in the `jkozik` and `docker`
   groups.
+- Installed with sudo in a real terminal. (Run with the `!` prefix, the
+  `sudo cp` silently didn't happen, so every item showed "unsupported item
+  key".) Items and triggers were created in the Zabbix UI; the table is in
+  `README.md`.
+- **Live test:** stopped `nginx-scw` 13:45-14:06 EST. Cloudflare returned
+  502, so the website item read 1. "SCW website stale or down" fired at
+  13:55 and "SCW nginx container unhealthy" at 14:00. Both cleared at about
+  14:10, after the restart. The Zabbix server displays Central time.
 
 ## Still to do
 

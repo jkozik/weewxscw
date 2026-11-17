@@ -119,6 +119,23 @@ docker logs --since 20m weewx-scw 2>&1 | grep -E "Added record .* to database|Ge
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/    # expect 200
 ```
 
+## Monitoring (Zabbix)
+
+Install the agent side with sudo:
+`cp zabbix/weewxscw.conf /etc/zabbix/zabbix_agentd.d/`,
+`cp zabbix/scripts/weewxscw_* /etc/zabbix/scripts/`, then
+`systemctl restart zabbix-agent`. Items are type "Zabbix agent" on host
+weewx174.kozik.net:
+
+| Item key | Interval | Trigger |
+|---|---|---|
+| `weewxscw.website.health` (0 ok / 1 banner / 2 stale / 3 down) | 5m | `min(...,#2)>0` (High) |
+| `weewxscw.archive[age]` (minutes) | 5m | `last(...)>35` (High) |
+| `weewxscw.archive[outtemp]` (1/0) | 5m | `max(...,30m)=0` (High) |
+| `weewxscw.archive[rxcheck]` (%, Numeric float) | 5m | `avg(...,1h)<50` (Warning) |
+| `weewxscw.container.health[weewx-scw]`, `[nginx-scw]` (1/0) | 5m | `max(...,15m)=0` (Average) |
+| `weewxscw.backup.age` (days) | 1h | `last(...)>8` (Warning) |
+
 ## Things to know
 
 - **The WiFiLogger accepts one TCP client.** After weewx disconnects, it can
