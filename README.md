@@ -50,11 +50,12 @@ Local page: http://<vm>:8090/
 - `data/public_html` must be owned by uid 1000 (weewx in the container). If
   Docker creates it first (nginx bind mount) it is root-owned and reports fail:
   `docker run --rm -v "$PWD/data:/data" alpine:3 chown 1000:1000 /data/public_html`
-- **Envoy clock jumps back 1 hour while weewx is disconnected** (seen
-  2026-11-14 and 2026-11-17, both during restarts). Likely the WiFiLogger's
-  own time sync using a Central time zone. weewx resets the clock on reconnect
-  and every 4 h. Fix: WiFiLogger dashboard (192.168.0.107 on the Florida LAN)
-  time zone -> Eastern, or disable its console clock sync.
+- **Envoy clock jumped back 1 hour whenever weewx disconnected** (2026-11-14,
+  2026-11-17). Cause: the WiFiLogger syncs the Envoy's clock using its own
+  time zone setting, which was Central. Fixed 2026-11-17: WiFiLogger dashboard
+  (192.168.0.107 on the Florida LAN) time zone -> Eastern; it only sticks
+  after Save **and reboot**. Verified: clock error -0.19 s after a 5-min
+  disconnect. weewx also resets the clock on reconnect and every 4 h.
 - Logging goes to stdout (`[Logging]` at end of weewx.conf); the container has
   no syslog.
 
