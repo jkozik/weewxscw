@@ -178,10 +178,34 @@ Modeled on `weewxrtlsdr` (Naperville); nothing is shared with it or with
   - Test: weewx stopped for 5 minutes, then restarted. The clock error was
     **-0.19 s**. Fixed.
 
+## 2026-11-17: stale public site, Zabbix monitoring
+
+- **Problem:** while building the Zabbix checks I found that
+  weewx.sancapweather.com still showed "last update 11/14/26 17:15".
+  The cause was the Nov 14 database trim: I *moved* `data/public_html` aside
+  and created a new folder. A Docker bind mount follows the original folder
+  even after it's renamed, so nginx kept serving the old snapshot for three
+  days while weewx wrote fresh pages to the new folder. The nginx health
+  check (HTTP 200) didn't notice.
+  **Fix:** `docker compose restart nginx`. Lesson: never rename or replace a
+  bind-mounted folder under a running container; empty it in place instead,
+  or restart the container afterwards.
+- **Zabbix:** added `zabbix/weewxscw.conf` (UserParameters) and two scripts,
+  separate from weewx51's `weewx.conf` items:
+  - a public-site check through Cloudflare (banner and `lastupdate` no
+    older than 35 minutes; it would have caught the stale-nginx problem);
+  - the newest archive record's age, whether it has an outdoor temperature,
+    and its radio reception %;
+  - Docker health for both containers;
+  - backup age.
+
+  Tested as jkozik, including negative tests for the stale, unreachable
+  and wrong-banner cases. The zabbix user is in the `jkozik` and `docker`
+  groups.
+
 ## Still to do
 
 - Watch weewxscw for a few days, then retire Cumulus and the Windows VM
   (.173). The 22222 Envoy can then be repurposed.
-- Zabbix monitoring items and triggers.
 - An M5Stick sensor pack (via MQTT, like weewxrtlsdr) to add readings the
   Vue lacks.

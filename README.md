@@ -39,6 +39,7 @@ Vantage Vue ISS ──radio, ch 1──▶ Davis Envoy ──▶ WiFiLogger (TCP
 | `data/weewx.conf.example` | weewx config template (tracked). Copy it to `data/weewx.conf`, which is git-ignored |
 | `data/skins/`, `data/bin/` | stock skins and weewx's user directory, as created by `weectl station create` |
 | `weewxscwbck.sh` | weekly backup (cron) |
+| `zabbix/` | Zabbix agent UserParameters and scripts (site freshness, archive age, outdoor data, reception, container health, backup age) |
 | `cumulus-import/` | one-off Cumulus history import: cleanup, import config, verification |
 
 ## Secrets
