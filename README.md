@@ -88,6 +88,16 @@ Back-out: `docker compose stop weewx`, copy
 `data/archive/weewx.sdb`, delete `data/public_html/NOAA/NOAA-2025*` and
 `NOAA-2026-0[1-9]*`/`NOAA-2026-10*`, start.
 
+## Backup
+
+`weewxscwbck.sh` (modeled on weewxrtlsdr's): online SQLite snapshot (no
+container stop; stopping weewx frees the WiFiLogger and invites the lockout /
+clock jump), rsync of the project, tarball `/backup/weewxscw.YYYYMMDD.HH.tar.gz`,
+FTP copy to 192.168.100.143:/weewx (login in `~/.ncftp-backup.cfg`), 84-day
+local retention. Root crontab, Sunday 23:45:
+
+    45 23 * * 0 /home/jkozik/projects/weewxscw/weewxscwbck.sh >> /home/jkozik/projects/weewxscw/weewxscwbck.log 2>&1
+
 ## Back out
 
 `docker compose down` — nothing outside this directory is touched

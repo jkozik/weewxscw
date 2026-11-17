@@ -19,10 +19,10 @@ services:
     environment:
       - TZ=America/New_York
     # Fresh Seasons pages = the Envoy is being polled and archive records
-    # are being written. The Envoy's archive interval can be up to 30 min,
-    # so allow ~2 intervals before calling it unhealthy.
+    # are being written. Envoy archive interval is 15 min, so allow 2
+    # intervals plus a 5-min margin before calling it unhealthy.
     healthcheck:
-      test: ["CMD-SHELL", "find /data/public_html -name 'index.html' -mmin -65 | grep -q . || exit 1"]
+      test: ["CMD-SHELL", "find /data/public_html -name 'index.html' -mmin -35 | grep -q . || exit 1"]
       interval: 5m
       timeout: 10s
       retries: 3
