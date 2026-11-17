@@ -29,13 +29,13 @@ version = 5.5.2
     location = Weewx.SanCapWeather.com
     
     # Latitude in decimal degrees. Negative for southern hemisphere.
-    latitude = 26.44
+    latitude = 26.4686
     # Longitude in decimal degrees. Negative for western hemisphere.
-    longitude = -82.1
+    longitude = -82.16
     
     # Altitude of the station, with the unit it is in. This is used only
     # if the hardware cannot supply a value.
-    altitude = 3, meter    # Choose 'foot' or 'meter' for unit
+    altitude = 14, foot     # Choose 'foot' or 'meter' for unit
     
     # Set to type of station hardware. There must be a corresponding stanza
     # in this file, which includes a value for the 'driver' option.
