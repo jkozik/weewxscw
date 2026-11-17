@@ -1,105 +1,136 @@
 # weewxscw
 
-WeeWX for the Sanibel/Captiva (Florida) home station:
-Davis **Vantage Vue** ISS → Davis **Envoy** → **WiFiLogger** → home NAT port
-forward → this VM (weewx `Vantage` driver, `type = ethernet`).
-Web page: stock **Seasons** skin, nginx on host port **8090** →
-`weewx.sancapweather.com` via a Cloudflare reverse proxy.
-Modeled on `~/projects/weewxrtlsdr` (independent; shares nothing with it or weewx51).
+[WeeWX](https://weewx.com/) for a Davis **Vantage Vue** weather station in
+Sanibel/Captiva, Florida, served at
+[weewx.sancapweather.com](https://weewx.sancapweather.com/).
 
-| Link | What | Where configured |
-|---|---|---|
-| Station | Envoy via WiFiLogger, TCP, host/port in live config | `data/weewx.conf` `[Vantage]` |
-| Web | Seasons skin, :8090 | `docker-compose.yml` nginx; `[StdReport][[SeasonsReport]]` |
+```
+Vantage Vue ISS ──radio, ch 1──▶ Davis Envoy ──▶ WiFiLogger (TCP) ──▶ home router
+   (Florida)                                                        NAT port forward
+                                                                          │ internet
+                                                                          ▼
+                                  Ubuntu VM (Naperville): Docker Compose
+                                  ┌─────────────────────────────────────────┐
+                                  │ weewx-scw   felddy/weewx 5.5, Vantage   │
+                                  │             driver (type = ethernet)    │
+                                  │      │ data/archive/weewx.sdb (SQLite)  │
+                                  │      ▼ data/public_html (Seasons skin)  │
+                                  │ nginx-scw   :8090 ──▶ Cloudflare proxy  │
+                                  └─────────────────────────────────────────┘
+```
 
-Containers: `weewx-scw`, `nginx-scw` (compose project `weewxscw`).
-Timezone America/New_York. Archive interval comes from the Envoy (15 min).
+- weewx polls the Envoy over the internet through the WiFiLogger. It reads
+  live readings every few seconds and the Envoy's 15-minute archive records.
+- The stock **Seasons** skin is served by nginx on host port **8090**. A
+  Cloudflare reverse proxy maps `weewx.sancapweather.com` to that port.
+- The history from **2025-06-30** comes from the station's previous
+  software, Cumulus. `cumulus-import/` has the scripts used for the
+  import.
+- The Vue has no solar or UV sensors.
+
+`NOTES.md` is the log of how this was built and what went wrong along the way.
+
+## Repository layout
+
+| Path | What |
+|---|---|
+| `Dockerfile` | `felddy/weewx:5.5.6`, system time zone America/New_York |
+| `docker-compose.yml` | `weewx-scw` and `nginx-scw`, with health checks, log caps and resource limits |
+| `data/weewx.conf.example` | weewx config template (tracked). Copy it to `data/weewx.conf`, which is git-ignored |
+| `data/skins/`, `data/bin/` | stock skins and weewx's user directory, as created by `weectl station create` |
+| `weewxscwbck.sh` | weekly backup (cron) |
+| `cumulus-import/` | one-off Cumulus history import: cleanup, import config, verification |
 
 ## Secrets
 
-`data/weewx.conf` is git-ignored (holds the DDNS host/port and any future
-passwords). `data/weewx.conf.example` is the tracked template with
-`replace_me` placeholders. Copy any non-secret config change into both.
+`data/weewx.conf` holds the station's DDNS host name and port, and any
+passwords added later. It is git-ignored. `data/weewx.conf.example` is the
+same file with `replace_me` placeholders. When you change the config, copy
+non-secret changes into the example as well.
 
-## Bring up
+## Install
+
+Requirements: Docker with the compose plugin. You also need a WiFiLogger
+(or another Davis TCP logger) reachable at `host:port`.
+
+1. Clone and create the live config:
+   ```bash
+   git clone <this repo> weewxscw && cd weewxscw
+   cp data/weewx.conf.example data/weewx.conf
+   # edit data/weewx.conf, section [Vantage]:
+   #   host = <ddns name or IP>     tcp_port = <port>
+   ```
+   Set `[Station]` (location, latitude, longitude, altitude) if this is a
+   different station.
+
+2. Create the web folder owned by the container's weewx user (uid 1000).
+   If Docker creates it first for nginx's mount, it is owned by root, and
+   weewx can't write the pages:
+   ```bash
+   mkdir -p data/public_html data/archive
+   sudo chown 1000:1000 data/public_html data/archive   # skip if you are uid 1000
+   ```
+
+3. Check that the Envoy listens on the same channel as the outdoor unit
+   (Vue default: channel 1). Run this with no other client connected:
+   ```bash
+   docker compose build
+   docker run --rm --entrypoint weectl -v "$PWD/data:/data" weewxscw-weewx \
+     device --config /data/weewx.conf --info | sed -n '/TRANSMITTERS/,/CRC/p'
+   ```
+   Channel 1 should be `active ... iss`, and `Total packets received` should
+   be above 0. To change channels, see "Envoy channel" in `NOTES.md`.
+
+4. Start:
+   ```bash
+   docker compose up -d
+   ```
+   On first start, weewx downloads the Envoy's stored archive before it
+   starts the live loop. **Don't restart it during that download.**
+
+5. Point the reverse proxy (or a browser) at `http://<host>:8090/`.
+
+6. Optional: install the weekly backup in root's crontab (Sunday 23:45):
+   ```
+   45 23 * * 0 /home/jkozik/projects/weewxscw/weewxscwbck.sh >> /home/jkozik/projects/weewxscw/weewxscwbck.log 2>&1
+   ```
+   The script takes an online SQLite snapshot (weewx keeps running), writes
+   a tarball to `/backup/weewxscw.YYYYMMDD.HH.tar.gz`, FTPs a copy (login
+   from `~/.ncftp-backup.cfg`), and keeps 84 days of tarballs.
+
+## Verify it's working
 
 ```bash
-cp data/weewx.conf.example data/weewx.conf   # then set [Vantage] host / tcp_port
-docker compose up -d --build
-docker logs -f weewx-scw
+# 1. Both containers healthy (weewx: Seasons page rewritten in the last 35 min)
+docker ps --filter name=scw --format '{{.Names}}\t{{.Status}}'
+
+# 2. Connected, clock in sync, live loop running
+docker logs weewx-scw 2>&1 | grep -E "Clock error|Starting main packet loop" | tail -2
+
+# 3. Live readings include OUTDOOR values (outTemp/outHumidity/windSpeed).
+#    If only inTemp/barometer appear, the Envoy isn't hearing the outdoor unit (step 3).
+docker logs --since 2m weewx-scw 2>&1 | grep '^LOOP' | tail -1 | tr ',' '\n' | grep -E 'outTemp|outHumidity|windSpeed'
+
+# 4. A new archive record every 15 minutes, followed by a report
+docker logs --since 20m weewx-scw 2>&1 | grep -E "Added record .* to database|Generated"
+
+# 5. The page is served
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/    # expect 200
 ```
-Local page: http://<vm>:8090/
 
-## Gotchas
+## Things to know
 
-- **Envoy channel.** This Envoy came from another station and listened on
-  channel 3; the Vue ISS is on channel 1, so it received nothing (archive had
-  indoor/barometer only, rxCheckPercent 0). Fixed 2026-11-14 with weewx stopped:
-  `weectl device --set-transmitter-type=1,0 -y` and `--set-transmitter-type=3,10 -y`
-  (back out: `3,0` and `1,10`). Check with `weectl device --info` →
-  TRANSMITTERS / RECEPTION STATS.
-- Port 22222 is a *different* Envoy (same Vue ISS) polled by Cumulus on a
-  Windows VM. Never connect to it — its WiFiLogger allows one client.
-- Records before 2026-11-14 12:45 EST have no outdoor data.
-
-- **The WiFiLogger allows one TCP client and holds a dropped session for
-  minutes.** After stopping/restarting weewx (or any test connection) it may
-  answer nothing for ~5+ minutes ("Unable to wake up Vantage console").
-  Don't restart repeatedly; wait. Don't restart during the first-run catch-up
-  (download of the Envoy's archive memory).
-- `data/public_html` must be owned by uid 1000 (weewx in the container). If
-  Docker creates it first (nginx bind mount) it is root-owned and reports fail:
-  `docker run --rm -v "$PWD/data:/data" alpine:3 chown 1000:1000 /data/public_html`
-- **Envoy clock jumped back 1 hour whenever weewx disconnected** (2026-11-14,
-  2026-11-17). Cause: the WiFiLogger syncs the Envoy's clock using its own
-  time zone setting, which was Central. Fixed 2026-11-17: WiFiLogger dashboard
-  (192.168.0.107 on the Florida LAN) time zone -> Eastern; it only sticks
-  after Save **and reboot**. Verified: clock error -0.19 s after a 5-min
-  disconnect. weewx also resets the clock on reconnect and every 4 h.
-- Logging goes to stdout (`[Logging]` at end of weewx.conf); the container has
-  no syslog.
-
-## Cumulus history import (2025-06-30 to 2026-11-14)
-
-Done 2026-11-17. The Florida Cumulus 1 (Windows 10 VM 192.168.100.173,
-`C:\Cumulus`, polling the 22222 Envoy) logs were zipped with PowerShell
-(`Compress-Archive` of `C:\Cumulus\data` + `Cumulus.ini`) and scp'd to
-`~/cumulus-import-scw/` (outside git; Cumulus.ini can hold passwords).
-Scripts in `cumulus-import/`:
-
-1. `clean_cumulus.py raw/data clean`: strips NUL bytes (Aug 2026 crash),
-   drops exact duplicates and out-of-order stray rows, cuts off at
-   2026-11-14 12:45 EST (first weewxscw record), and rewrites the rain field
-   as a running total so the 23:50-00:00 rain isn't lost (this Cumulus resets
-   "rain since midnight" on the 00:00 row).
-2. Trial import into a copy (`weectl import`, ~19 min, `TZ=America/New_York`,
-   `data/bin` mounted for calc-missing) with `cumulus.conf`. weewx 5.5 calls
-   indoor temperature `cur_in_temp` (5.1 used `curr_in_temp`).
-3. `verify_trial.py` against Cumulus's dayfile.txt: temp highs 466/466,
-   lows 465/466 (Cumulus's own 0.0 F glitch on 2026-02-16), rain 466/466.
-4. Live swap: stop weewx, copy newer records + Nov 15+ daily summaries from
-   live into the trial copy, swap in, start.
-
-Not imported: UV/solar (the Vue has neither; Cumulus logged junk), the
-2026-08-17..09-29 internet outage gap, and Cumulus's 5.87 in on 2026-09-29
-(six weeks of rain lumped into one day).
-
-Back-out: `docker compose stop weewx`, copy
-`~/cumulus-import-scw/backup/weewx.sdb.pre-live-swap-20261117` to
-`data/archive/weewx.sdb`, delete `data/public_html/NOAA/NOAA-2025*` and
-`NOAA-2026-0[1-9]*`/`NOAA-2026-10*`, start.
-
-## Backup
-
-`weewxscwbck.sh` (modeled on weewxrtlsdr's): online SQLite snapshot (no
-container stop; stopping weewx frees the WiFiLogger and invites the lockout /
-clock jump), rsync of the project, tarball `/backup/weewxscw.YYYYMMDD.HH.tar.gz`,
-FTP copy to 192.168.100.143:/weewx (login in `~/.ncftp-backup.cfg`), 84-day
-local retention. Root crontab, Sunday 23:45:
-
-    45 23 * * 0 /home/jkozik/projects/weewxscw/weewxscwbck.sh >> /home/jkozik/projects/weewxscw/weewxscwbck.log 2>&1
+- **The WiFiLogger accepts one TCP client.** After weewx disconnects, it can
+  refuse new connections for about 5 minutes. weewx retries on its own, so
+  don't restart repeatedly. Don't point other tools (WeatherLink, Cumulus,
+  test scripts) at it while weewx is running.
+- **WiFiLogger time zone must be Eastern.** The WiFiLogger syncs the Envoy's
+  clock in its own time zone. When it was set to Central, the clock jumped
+  back an hour on every disconnect. The setting only sticks after Save
+  *and* a reboot.
+- Logs go to `docker logs weewx-scw` (stdout), capped at 30 MB.
 
 ## Back out
 
-`docker compose down` — nothing outside this directory is touched
-(images `weewxscw-weewx`, `nginx:1.27-alpine`, `alpine:3` can be removed).
+`docker compose down`. Nothing outside this directory is touched. The images
+`weewxscw-weewx` and `nginx:1.27-alpine` can be removed afterwards.
