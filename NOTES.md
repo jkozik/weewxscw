@@ -211,9 +211,47 @@ Modeled on `weewxrtlsdr` (Naperville); nothing is shared with it or with
   13:55 and "SCW nginx container unhealthy" at 14:00. Both cleared at about
   14:10, after the restart. The Zabbix server displays Central time.
 
+## 2026-11-17: planning a realtime link to Home Assistant
+
+Goal: an M5Stack Tab5 on the kitchen table as a glanceable live weather
+display (temperature, humidity, rain, rain rate, radar loop), driven by
+Home Assistant on **osprey** (192.168.0.28, Florida LAN; Home Assistant
+**Container** 2026.5.3, so there are no add-ons).
+
+- Options considered:
+  - A: a JSON file from weewx, read by HA through Cloudflare. Simple, but
+    only updates every 15 minutes.
+  - B: MQTT from weewx in Naperville to Florida, via a new broker plus
+    WebSockets over the Cloudflare Tunnel or a port forward.
+  - C: weewx publishing into Florida directly. Avoided, because it needs
+    a port open into the Florida network.
+- **Finding:** the 22223 WiFiLogger has a built-in **MQTT data export**
+  ("Realtime.txt & wflexp.json", interval in seconds, with login and
+  topic). The realtime path can therefore stay entirely on the Florida
+  LAN: WiFiLogger → Mosquitto on osprey → HA → Tab5 (ESPHome). It needs
+  no Naperville round trip and no new exposure, and keeps working during
+  an internet outage. **weewxscw is unchanged** and remains the long-term
+  record.
+- Open risk: whether the WiFiLogger's export competes with weewx's
+  single TCP session. When the export is enabled, this session checks
+  weewx-scw's logs (`ip-read` errors, lockouts), and Zabbix watches
+  polling.
+- The Cloudflare mapping for weewx.sancapweather.com is a **Cloudflare
+  Tunnel** to the Naperville LAN (192.168.100.174:8090). There are no
+  pfSense port forwards.
+- Decision: no SSH from Naperville into osprey. The osprey work is done
+  by a **separate Claude Code session on osprey**, from a handoff brief
+  (kept outside this public repo because it has LAN details). It covers
+  Mosquitto on osprey (LAN only, password logins), the WiFiLogger MQTT
+  export, HA MQTT sensors, and the Tab5 with ESPHome, including a radar
+  proof of concept.
+
 ## Still to do
 
 - Watch weewxscw for a few days, then retire Cumulus and the Windows VM
   (.173). The 22222 Envoy can then be repurposed.
-- An M5Stick sensor pack (via MQTT, like weewxrtlsdr) to add readings the
-  Vue lacks.
+- After the WiFiLogger's MQTT export is enabled (osprey project), check
+  weewx-scw's logs for connection errors or lockouts, that day and the
+  next.
+- The M5Stick + ENV III box (UV and solar) will publish to the osprey
+  Mosquitto broker (osprey project).

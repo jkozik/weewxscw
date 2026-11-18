@@ -15,14 +15,15 @@ Vantage Vue ISS ──radio, ch 1──▶ Davis Envoy ──▶ WiFiLogger (TCP
                                   │             driver (type = ethernet)    │
                                   │      │ data/archive/weewx.sdb (SQLite)  │
                                   │      ▼ data/public_html (Seasons skin)  │
-                                  │ nginx-scw   :8090 ──▶ Cloudflare proxy  │
+                                  │ nginx-scw   :8090 ──▶ Cloudflare Tunnel │
                                   └─────────────────────────────────────────┘
 ```
 
 - weewx polls the Envoy over the internet through the WiFiLogger. It reads
   live readings every few seconds and the Envoy's 15-minute archive records.
 - The stock **Seasons** skin is served by nginx on host port **8090**. A
-  Cloudflare reverse proxy maps `weewx.sancapweather.com` to that port.
+  Cloudflare Tunnel maps `weewx.sancapweather.com` to that port; no router
+  port forwards are needed.
 - The history from **2025-06-30** comes from the station's previous
   software, Cumulus. `cumulus-import/` has the scripts used for the
   import.
