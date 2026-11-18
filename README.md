@@ -152,7 +152,7 @@ weewx174.kozik.net:
 | `weewxscw.archive[age]` (minutes) | 5m | `last(...)>35` (High) |
 | `weewxscw.archive[outtemp]` (1/0) | 5m | `max(...,30m)=0` (High) |
 | `weewxscw.archive[rxcheck]` (%, Numeric float) | 5m | `avg(...,1h)<50` (Warning) |
-| `weewxscw.container.health[weewx-scw]`, `[nginx-scw]` (1/0) | 5m | `max(...,15m)=0` (Average) |
+| `weewxscw.container.health[weewx-scw]`, `[nginx-scw]`, `[mosquitto-scw]` (1/0) | 5m | `max(...,15m)=0` (Average) |
 | `weewxscw.backup.age` (days) | 1h | `last(...)>8` (Warning) |
 
 ## Things to know

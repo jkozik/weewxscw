@@ -307,14 +307,24 @@ Home Assistant on **osprey** (192.168.0.28, Florida LAN; Home Assistant
   `rxCheckPercent` isn't in live packets (archive only), so it doesn't
   appear.
 
+- **osprey's bridge** (osprey session) connected at 14:57:12 ET, read-only
+  as `osprey-bridge`. It appears as the Docker gateway 172.21.0.x, which is
+  normal for a published port.
+- WiFiLogger MQTT export set back to **Disable** (reboot ~15:13 ET). weewx
+  dropped at 15:13:15 and reconnected at 15:14:35, clock -2.57 s.
+- The broker health check was `nc -z`, which logged a connect/disconnect
+  pair every minute and buried the bridge messages. Changed to a process
+  check (`pidof mosquitto`).
+- **Bridge reconnect test:** `mosquitto-scw` was recreated at 15:14:51 ET.
+  weewx's publisher reconnected at 15:14:53 and osprey's bridge reconnected
+  by itself at **15:15:03** (11 s).
+
 ## Still to do
 
 - Watch weewxscw for a few days, then retire Cumulus and the Windows VM
   (.173). The 22222 Envoy can then be repurposed.
-- The WiFiLogger's own MQTT export (osprey test) can be set back to
-  Disable; weewx now provides the live data.
-- osprey: bridge to `mosquitto-scw` over Tailscale, then the Home Assistant
-  sensors and the Tab5 (osprey project).
-- Zabbix: add `weewxscw.container.health[mosquitto-scw]`.
+- osprey: Home Assistant sensors and the Tab5 (osprey project).
+- Zabbix: add the item `weewxscw.container.health[mosquitto-scw]` and its
+  trigger (no agent change needed).
 - The M5Stick + ENV III box (UV and solar) will publish to the osprey
   Mosquitto broker (osprey project).

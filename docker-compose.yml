@@ -60,8 +60,11 @@ services:
     volumes:
       - ./mosquitto/config:/mosquitto/config:ro
       - ./mosquitto/data:/mosquitto/data
+    # Process check only: a TCP probe would log a connect/disconnect pair
+    # every interval and bury the bridge's connection messages. Whether
+    # data actually flows is watched by Zabbix (archive/website checks).
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883 || exit 1"]
+      test: ["CMD-SHELL", "pidof mosquitto >/dev/null || exit 1"]
       interval: 1m
       timeout: 5s
       retries: 3
