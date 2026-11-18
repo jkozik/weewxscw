@@ -246,6 +246,42 @@ Home Assistant on **osprey** (192.168.0.28, Florida LAN; Home Assistant
   export, HA MQTT sensors, and the Tab5 with ESPHome, including a radar
   proof of concept.
 
+## 2026-11-18: WiFiLogger MQTT test, MQTT trial, Tailscale
+
+- **WiFiLogger MQTT export (osprey session):** enabled 09:38 ET; the topic
+  was changed (a trailing "/" was needed) at about 09:53. Each change needs
+  a WiFiLogger save and reboot, and each reboot dropped weewx's connection
+  for about 80 s (reconnected 09:41:07 and 09:54:41). The clock stayed
+  correct (-1.3 s), confirming the time zone fix.
+- **Finding:** the WiFiLogger's own dashboard and MQTT export **stopped at
+  09:54:30**, within seconds of weewx reconnecting. Most likely, while a TCP
+  client (weewx) is connected, the WiFiLogger hands the console to it and
+  stops its own polling. So the WiFiLogger export and weewx exclude each
+  other. Constraints: keep Cumulus on the other Envoy, and buy no more
+  hardware. **Decision:** realtime data for Home Assistant will come from
+  weewx instead.
+- **MQTT trial** (throwaway containers, simulator driver):
+  - weewx 5.5 + `weewx-mqtt` (matthewwall, v0.24 from `archive/master.zip`)
+    + **`paho-mqtt==1.6.1`**. paho 2.x breaks this extension (upstream
+    issue #42), and 1.6.1 installs fine on the image's Python 3.14.
+  - It published JSON to `weather/scw/loop`.
+  - `post_interval = 10` throttles to exactly one message every 10 s.
+  - `obs_to_upload = none`, `append_units_label = false` and per-field
+    `[[[inputs]]] format` give a tidy message of about 260 bytes. Remember
+    to add `dateTime`.
+  - Traffic is negligible: about 2.5 MB a day at 10 s.
+  - Harmless warning: a `SyntaxWarning` from the extension's docstring.
+- **Design:** two brokers and a bridge. weewx → `mosquitto-scw`
+  (Naperville) ◀── bridge ── Mosquitto on osprey (Florida dials out) →
+  Home Assistant → Tab5. Cloudflare was considered and rejected: Mosquitto
+  bridges speak raw TCP, not WebSockets. Over a Cloudflare Tunnel that
+  would need Cloudflare Access, a service token and a `cloudflared access
+  tcp` relay on osprey. Cloudflare stays for websites only.
+- **Tailscale on weewx174** (1.104.7, Tailscale's apt repo):
+  `sudo tailscale up --hostname=weewx174 --accept-dns=false`. Key expiry is
+  disabled for weewx174 and osprey. A direct connection to osprey takes
+  about 64 ms. See "Tailscale" in README.md for the rules.
+
 ## Still to do
 
 - Watch weewxscw for a few days, then retire Cumulus and the Windows VM

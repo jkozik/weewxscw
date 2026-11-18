@@ -147,6 +147,16 @@ weewx174.kozik.net:
   clock in its own time zone. When it was set to Central, the clock jumped
   back an hour on every disconnect. The setting only sticks after Save
   *and* a reboot.
+- **Tailscale: use the 100.x addresses, never `--accept-routes` on this
+  VM.** weewx174 is on the tailnet (`--accept-dns=false`). To reach osprey
+  (Florida), use its **Tailscale address**: `tailscale status` lists every
+  machine, and `tailscale ip -4` shows this VM's own address. **Don't**
+  ping its Florida LAN address, 192.168.0.x; that only works from devices
+  that accept routes, like the laptop. Never run `tailscale up
+  --accept-routes` here: the Synology advertises **192.168.100.0/24, this
+  VM's own LAN**, and accepting it could send local traffic (pfSense,
+  Zabbix, the backup FTP server) through the tailnet. The MQTT bridge
+  needs only the 100.x addresses.
 - Logs go to `docker logs weewx-scw` (stdout), capped at 30 MB.
 
 ## Back out
