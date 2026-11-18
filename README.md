@@ -56,12 +56,18 @@ non-secret changes into the example as well.
 
 ## Install
 
-Requirements: Docker with the compose plugin. You also need a WiFiLogger
-(or another Davis TCP logger) reachable at `host:port`.
+Requirements: Docker with the compose plugin, and Tailscale (for the MQTT
+bridge to Florida). You also need a WiFiLogger (or another Davis TCP
+logger) reachable at `host:port`.
+
+The scripts assume the repo lives at **`/home/jkozik/projects/weewxscw`**
+(`weewxscwbck.sh`, `zabbix/scripts/weewxscw_archive.py`, and the cron line).
+Clone it there, or edit those paths.
 
 1. Clone and create the live config:
    ```bash
-   git clone <this repo> weewxscw && cd weewxscw
+   mkdir -p ~/projects && cd ~/projects
+   git clone https://github.com/jkozik/weewxscw.git && cd weewxscw
    cp data/weewx.conf.example data/weewx.conf
    # edit data/weewx.conf, section [Vantage]:
    #   host = <ddns name or IP>     tcp_port = <port>
@@ -97,27 +103,48 @@ Requirements: Docker with the compose plugin. You also need a WiFiLogger
    weewx-mqtt (the weewx add-on in `data/bin/user/mqtt.py`) needs
    **paho-mqtt 1.6.1**; the Dockerfile pins it.
 
-5. Start:
+5. Tailscale, so osprey's broker can reach this one:
+   ```bash
+   # Ubuntu 24.04 "noble" (use your release's codename)
+   curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+   curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | sudo tee /etc/apt/sources.list.d/tailscale.list
+   sudo apt-get update && sudo apt-get install -y tailscale
+   sudo tailscale up --hostname=weewx174 --accept-dns=false   # never --accept-routes
+   tailscale ip -4      # this VM's 100.x address, used by osprey's bridge
+   ```
+   In the Tailscale admin console, **disable key expiry** for this machine.
+
+6. Start:
    ```bash
    docker compose up -d
    ```
    On first start, weewx downloads the Envoy's stored archive before it
    starts the live loop. **Don't restart it during that download.**
 
-6. Point the reverse proxy (or a browser) at `http://<host>:8090/`.
+7. Point things at this machine:
+   - **Cloudflare Tunnel:** `weewx.sancapweather.com` → `<this VM's LAN IP>:8090`.
+   - **osprey's Mosquitto bridge:** `address <this VM's tailscale ip -4>:1884`,
+     login `osprey-bridge`.
+   - Or just a browser at `http://<host>:8090/`.
 
-7. Optional: install the weekly backup in root's crontab (Sunday 23:45):
+8. Optional: install the weekly backup in root's crontab (Sunday 23:45):
    ```
    45 23 * * 0 /home/jkozik/projects/weewxscw/weewxscwbck.sh >> /home/jkozik/projects/weewxscw/weewxscwbck.log 2>&1
    ```
    The script takes an online SQLite snapshot (weewx keeps running), writes
    a tarball to `/backup/weewxscw.YYYYMMDD.HH.tar.gz`, FTPs a copy (login
-   from `~/.ncftp-backup.cfg`), and keeps 84 days of tarballs.
+   from `~/.ncftp-backup.cfg`), and keeps 84 days of tarballs. The tarball
+   holds `weewxscwBck/project/` (the whole repo folder, including the live
+   `data/weewx.conf` and the broker's private files, but not the database),
+   `weewxscwBck/db/weewx.sdb` and `weewxscwBck/secrets/weewxscw-mqtt.txt`.
+   **It contains secrets; keep it private.**
+
+9. Optional: Zabbix monitoring (see "Monitoring" below).
 
 ## Verify it's working
 
 ```bash
-# 1. Both containers healthy (weewx: Seasons page rewritten in the last 35 min)
+# 1. All three containers healthy (weewx: Seasons page rewritten in the last 35 min)
 docker ps --filter name=scw --format '{{.Names}}\t{{.Status}}'
 
 # 2. Connected, clock in sync, live loop running
@@ -155,6 +182,15 @@ weewx174.kozik.net:
 | `weewxscw.container.health[weewx-scw]`, `[nginx-scw]`, `[mosquitto-scw]` (1/0) | 5m | `max(...,15m)=0` (Average) |
 | `weewxscw.backup.age` (days) | 1h | `last(...)>8` (Warning) |
 
+Value maps (host → Value mapping), display only; triggers use the raw
+numbers:
+- `SCW website health`: 0 OK, 1 Banner missing, 2 Stale or no timestamp,
+  3 Unreachable. Used by `website.health`.
+- `SCW OK/Problem`: 1 OK, 0 Problem. Used by the three `container.health`
+  items and `archive[outtemp]`.
+- `SCW no data`: -1 and 999 → No data. Used by `archive[age]` (units
+  `min`), `archive[rxcheck]` (`%`) and `backup.age` (`days`).
+
 ## Things to know
 
 - **The WiFiLogger accepts one TCP client.** After weewx disconnects, it can
@@ -179,5 +215,8 @@ weewx174.kozik.net:
 
 ## Back out
 
-`docker compose down`. Nothing outside this directory is touched. The images
-`weewxscw-weewx` and `nginx:1.27-alpine` can be removed afterwards.
+`docker compose down`. Nothing outside this directory is touched, except
+the items you installed yourself: the backup cron line, the Zabbix agent
+files, Tailscale, and `~/secrets/weewxscw-mqtt.txt`. The images
+`weewxscw-weewx`, `nginx:1.27-alpine` and `eclipse-mosquitto:2.1.2-alpine`
+can be removed afterwards.

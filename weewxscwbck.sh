@@ -29,6 +29,13 @@ mkdir -p ${BCKDIR}/project ${BCKDIR}/db
 rsync -a --delete --exclude 'data/archive/' --exclude '*.log' \
   ${PROJ}/ ${BCKDIR}/project/ || { echo "rsync FAILED"; exit 1; }
 
+# MQTT broker logins (plain text; the only copy outside the broker's hashed
+# passwd). Needed to rebuild mosquitto-scw on a new VM without re-keying
+# osprey's bridge. The tarball already holds data/weewx.conf (also secret).
+mkdir -p ${BCKDIR}/secrets && chmod 700 ${BCKDIR}/secrets
+install -m 600 /home/jkozik/secrets/weewxscw-mqtt.txt ${BCKDIR}/secrets/ \
+  || echo "WARNING: ~/secrets/weewxscw-mqtt.txt not copied"
+
 for DB in weewx.sdb; do
   python3 - "${PROJ}/data/archive/${DB}" "${BCKDIR}/db/${DB}" <<'EOF' || { echo "db snapshot of ${DB} FAILED"; exit 1; }
 import sqlite3, sys

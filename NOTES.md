@@ -319,12 +319,35 @@ Home Assistant on **osprey** (192.168.0.28, Florida LAN; Home Assistant
   weewx's publisher reconnected at 15:14:53 and osprey's bridge reconnected
   by itself at **15:15:03** (11 s).
 
+## 2026-11-18: Zabbix value maps, migration notes
+
+- Added the mosquitto container item and trigger, plus three host value
+  maps (display only; triggers still use the raw numbers):
+  - `SCW website health`: 0 OK / 1 Banner missing / 2 Stale or no
+    timestamp / 3 Unreachable.
+  - `SCW OK/Problem`: 1 OK / 0 Problem. Used by the container items and
+    outdoor data.
+  - `SCW no data`: -1 and 999 → No data. Used by archive age, reception and
+    backup age.
+
+  One map can't cover every item, because 1 means "banner missing" on the
+  website item but "healthy" on the container items. Units: `min`, `%`,
+  `days`. First readings: all OK, archive age 5 min, reception 85%,
+  backup age 1 day.
+- README install steps reviewed for a rebuild from a fresh clone: added
+  the Tailscale step, the expected repo path
+  (`/home/jkozik/projects/weewxscw`, hard-coded in the backup and Zabbix
+  scripts), what the backup tarball contains, and the Zabbix value maps. A
+  fresh-clone test passed: the compose file is valid, the example config
+  parses and the MQTT add-on loads.
+- `weewxscwbck.sh` now also saves `~/secrets/weewxscw-mqtt.txt`, the only
+  plain-text copy of the bridge password, so a restore doesn't require
+  re-keying osprey.
+
 ## Still to do
 
 - Watch weewxscw for a few days, then retire Cumulus and the Windows VM
   (.173). The 22222 Envoy can then be repurposed.
 - osprey: Home Assistant sensors and the Tab5 (osprey project).
-- Zabbix: add the item `weewxscw.container.health[mosquitto-scw]` and its
-  trigger (no agent change needed).
 - The M5Stick + ENV III box (UV and solar) will publish to the osprey
   Mosquitto broker (osprey project).
