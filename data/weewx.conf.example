@@ -214,6 +214,50 @@ version = 5.5.2
         # Set the following to True to have weewx use the WU "Rapidfire"
         # protocol. Not all hardware can support it. See the User's Guide.
         rapidfire = False
+    # LOCAL CHANGE: weewx-mqtt publishes live (LOOP) data to mosquitto-scw
+    # (same compose project); the Florida broker on osprey bridges it over
+    # Tailscale. Topic weather/scw/loop, one JSON message, at most every 10 s.
+    [[MQTT]]
+        server_url = mqtt://weewx:replace_me@mosquitto-scw:1883/
+        topic = weather/scw
+        unit_system = US
+        binding = loop
+        aggregation = aggregate
+        post_interval = 10
+        retain = true
+        obs_to_upload = none
+        append_units_label = false
+        [[[inputs]]]
+            [[[[dateTime]]]]
+                format = %.0f
+            [[[[outTemp]]]]
+                format = %.1f
+            [[[[outHumidity]]]]
+                format = %.0f
+            [[[[dewpoint]]]]
+                format = %.1f
+            [[[[heatindex]]]]
+                format = %.1f
+            [[[[windchill]]]]
+                format = %.1f
+            [[[[windSpeed]]]]
+                format = %.0f
+            [[[[windGust]]]]
+                format = %.0f
+            [[[[windDir]]]]
+                format = %.0f
+            [[[[barometer]]]]
+                format = %.3f
+            [[[[rainRate]]]]
+                format = %.2f
+            [[[[dayRain]]]]
+                format = %.2f
+            [[[[inTemp]]]]
+                format = %.1f
+            [[[[inHumidity]]]]
+                format = %.0f
+            [[[[rxCheckPercent]]]]
+                format = %.0f
 
 ##############################################################################
 
@@ -572,7 +616,7 @@ version = 5.5.2
         process_services = weewx.engine.StdConvert, weewx.engine.StdCalibrate, weewx.engine.StdQC, weewx.wxservices.StdWXCalculate
         xtype_services = weewx.wxxtypes.StdWXXTypes, weewx.wxxtypes.StdPressureCooker, weewx.wxxtypes.StdRainRater, weewx.wxxtypes.StdDelta
         archive_services = weewx.engine.StdArchive
-        restful_services = weewx.restx.StdStationRegistry, weewx.restx.StdWunderground, weewx.restx.StdPWSweather, weewx.restx.StdCWOP, weewx.restx.StdWOW, weewx.restx.StdWOWBE, weewx.restx.StdAWEKAS
+        restful_services = weewx.restx.StdStationRegistry, weewx.restx.StdWunderground, weewx.restx.StdPWSweather, weewx.restx.StdCWOP, weewx.restx.StdWOW, weewx.restx.StdWOWBE, weewx.restx.StdAWEKAS, user.mqtt.MQTT
         report_services = weewx.engine.StdPrint, weewx.engine.StdReport
 
 ##############################################################################

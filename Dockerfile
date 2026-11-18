@@ -8,4 +8,9 @@ USER root
 # leaves /etc/localtime at UTC; some skins/tools read it instead of $TZ.
 RUN echo America/New_York > /etc/timezone \
     && ln -sf /usr/share/zoneinfo/America/New_York /etc/localtime
+# weewx-mqtt (publishes live data to mosquitto-scw) uses the paho-mqtt 1.x
+# API; paho 2.x breaks it (upstream issue #42), so pin 1.6.1. felddy/weewx
+# points PIP_TARGET/PYTHONPATH at the bind-mounted /data, which would hide a
+# build-time install, so install into the venv itself (same as weewxrtlsdr).
+RUN env -u PIP_TARGET -u PYTHONPATH /opt/venv/bin/pip install --no-cache-dir paho-mqtt==1.6.1
 USER weewx

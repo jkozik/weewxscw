@@ -282,12 +282,39 @@ Home Assistant on **osprey** (192.168.0.28, Florida LAN; Home Assistant
   disabled for weewx174 and osprey. A direct connection to osprey takes
   about 64 ms. See "Tailscale" in README.md for the rules.
 
+## 2026-11-18: Naperville MQTT broker and weewx-mqtt (branch `mqtt-bridge`)
+
+- **`mosquitto-scw`** (`eclipse-mosquitto:2.1.2-alpine`; the bare `2.1.2`
+  tag doesn't exist), host port **1884**, because weewxrtlsdr's broker has
+  1883. Reachable from the Naperville LAN and the tailnet only. Password
+  logins and an ACL: `weewx` may write `weather/scw/#`; `osprey-bridge`
+  may only read it.
+- Mosquitto 2.1 warns, and future versions will refuse, if the acl or
+  passwd files aren't owned by the broker user with mode 600. So the
+  tracked `mosquitto/acl` is copied by `mosquitto/setup.sh` into
+  `mosquitto/config/` (owner 1883, mode 600, git-ignored). The script also
+  builds `passwd` from `~/secrets/weewxscw-mqtt.txt`.
+- Tests over the Tailscale address: anonymous connections and wrong
+  passwords are refused; `weewx` publishes and `osprey-bridge` receives;
+  `osprey-bridge` can't publish; `weewx` can't write outside its topic.
+- **weewx-mqtt** installed with `weectl extension install` (backup:
+  `weewx.conf.pre-mqtt`). The Dockerfile pins `paho-mqtt==1.6.1`. Config:
+  `binding = loop`, `post_interval = 10`, `retain = true`, and only the
+  needed fields, rounded (about 300 bytes). The add-on runs in its own
+  thread and retries if the broker is down, so it can't stall polling.
+- weewx was recreated at 14:16 ET and reconnected to the Envoy at once.
+  Real data is flowing.
+  `rxCheckPercent` isn't in live packets (archive only), so it doesn't
+  appear.
+
 ## Still to do
 
 - Watch weewxscw for a few days, then retire Cumulus and the Windows VM
   (.173). The 22222 Envoy can then be repurposed.
-- After the WiFiLogger's MQTT export is enabled (osprey project), check
-  weewx-scw's logs for connection errors or lockouts, that day and the
-  next.
+- The WiFiLogger's own MQTT export (osprey test) can be set back to
+  Disable; weewx now provides the live data.
+- osprey: bridge to `mosquitto-scw` over Tailscale, then the Home Assistant
+  sensors and the Tab5 (osprey project).
+- Zabbix: add `weewxscw.container.health[mosquitto-scw]`.
 - The M5Stick + ENV III box (UV and solar) will publish to the osprey
   Mosquitto broker (osprey project).

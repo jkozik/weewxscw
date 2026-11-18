@@ -27,6 +27,9 @@ Vantage Vue ISS ──radio, ch 1──▶ Davis Envoy ──▶ WiFiLogger (TCP
 - The history from **2025-06-30** comes from the station's previous
   software, Cumulus. `cumulus-import/` has the scripts used for the
   import.
+- Live readings are also published over **MQTT** (`weather/scw/loop`, JSON,
+  every 10 s) to the `mosquitto-scw` broker. The Florida broker on osprey
+  bridges them over Tailscale for Home Assistant.
 - The Vue has no solar or UV sensors.
 
 `NOTES.md` is the log of how this was built and what went wrong along the way.
@@ -36,7 +39,8 @@ Vantage Vue ISS ──radio, ch 1──▶ Davis Envoy ──▶ WiFiLogger (TCP
 | Path | What |
 |---|---|
 | `Dockerfile` | `felddy/weewx:5.5.6`, system time zone America/New_York |
-| `docker-compose.yml` | `weewx-scw` and `nginx-scw`, with health checks, log caps and resource limits |
+| `docker-compose.yml` | `weewx-scw`, `nginx-scw` and `mosquitto-scw`, with health checks, log caps and resource limits |
+| `mosquitto/` | broker config, tracked `acl`, and `setup.sh`, which installs the private acl/passwd copies |
 | `data/weewx.conf.example` | weewx config template (tracked). Copy it to `data/weewx.conf`, which is git-ignored |
 | `data/skins/`, `data/bin/` | stock skins and weewx's user directory, as created by `weectl station create` |
 | `weewxscwbck.sh` | weekly backup (cron) |
@@ -83,16 +87,26 @@ Requirements: Docker with the compose plugin. You also need a WiFiLogger
    Channel 1 should be `active ... iss`, and `Total packets received` should
    be above 0. To change channels, see "Envoy channel" in `NOTES.md`.
 
-4. Start:
+4. MQTT broker logins. Create `~/secrets/weewxscw-mqtt.txt` (chmod 600)
+   with one `user password` line each for `weewx` and `osprey-bridge`. Put
+   the `weewx` password in `[StdRESTful] [[MQTT]] server_url` in
+   `data/weewx.conf`. Then install the broker's private files:
+   ```bash
+   mosquitto/setup.sh
+   ```
+   weewx-mqtt (the weewx add-on in `data/bin/user/mqtt.py`) needs
+   **paho-mqtt 1.6.1**; the Dockerfile pins it.
+
+5. Start:
    ```bash
    docker compose up -d
    ```
    On first start, weewx downloads the Envoy's stored archive before it
    starts the live loop. **Don't restart it during that download.**
 
-5. Point the reverse proxy (or a browser) at `http://<host>:8090/`.
+6. Point the reverse proxy (or a browser) at `http://<host>:8090/`.
 
-6. Optional: install the weekly backup in root's crontab (Sunday 23:45):
+7. Optional: install the weekly backup in root's crontab (Sunday 23:45):
    ```
    45 23 * * 0 /home/jkozik/projects/weewxscw/weewxscwbck.sh >> /home/jkozik/projects/weewxscw/weewxscwbck.log 2>&1
    ```
@@ -118,6 +132,10 @@ docker logs --since 20m weewx-scw 2>&1 | grep -E "Added record .* to database|Ge
 
 # 5. The page is served
 curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8090/    # expect 200
+
+# 6. MQTT: a live JSON message (retained, so it appears at once), as the bridge sees it
+docker run --rm --network host eclipse-mosquitto:2.1.2-alpine mosquitto_sub \
+  -h "$(tailscale ip -4)" -p 1884 -u osprey-bridge -P '<password>' -t 'weather/scw/#' -v -C 1
 ```
 
 ## Monitoring (Zabbix)

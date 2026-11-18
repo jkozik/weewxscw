@@ -1,0 +1,7 @@
+# weewx-scw publishes the live weather topic
+user weewx
+topic write weather/scw/#
+
+# the Florida broker's bridge (osprey) reads it
+user osprey-bridge
+topic read weather/scw/#

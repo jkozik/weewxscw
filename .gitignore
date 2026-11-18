@@ -15,3 +15,8 @@ data/util/
 *.pre-*
 *.backup
 .claude/
+# Mosquitto: password file and runtime state are not tracked
+mosquitto/config/passwd
+mosquitto/config/acl
+mosquitto/data/
+

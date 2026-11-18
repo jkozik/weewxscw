@@ -4,7 +4,9 @@ name: "weewxscw"
 # WiFiLogger, reached over the internet at the host/port set in
 # data/weewx.conf [Vantage] (git-ignored; see data/weewx.conf.example).
 # Web: Seasons skin on host port 8090 -> weewx.sancapweather.com via a
-# Cloudflare reverse proxy.
+# Cloudflare Tunnel.
+# MQTT: weewx publishes live data to mosquitto-scw (host port 1884); the
+# Florida broker on osprey bridges it over Tailscale for Home Assistant.
 
 services:
   weewx:
@@ -40,6 +42,39 @@ services:
           memory: 384M
         reservations:
           cpus: '0.1'
+          memory: 64M
+    depends_on:
+      mosquitto:
+        condition: service_started
+
+  # Broker for weewx's live data (weewx-mqtt, topic weather/scw/loop).
+  # Host port 1884 (1883 is weewxrtlsdr's broker). Reachable from the
+  # Naperville LAN and the tailnet only (no port forward, not in the
+  # Cloudflare Tunnel); password logins + ACL, no anonymous access.
+  mosquitto:
+    image: eclipse-mosquitto:2.1.2-alpine
+    container_name: mosquitto-scw
+    restart: unless-stopped
+    ports:
+      - "1884:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/data:/mosquitto/data
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 1883 || exit 1"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
           memory: 64M
 
   nginx:
